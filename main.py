@@ -2,15 +2,32 @@ import discord
 from discord.ext import commands
 import requests
 import os
+from flask import Flask
+from threading import Thread
 
-# إعدادات البوت
+# 1. حل مشكلة Render (فتح بورت للمنصة)
+app = Flask('')
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run():
+    # Render يتطلب بورت 10000 افتراضياً أو Port من المتغيرات
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# 2. إعدادات البوت
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس (تأكد من كتابة الأسماء بدقة كما طلبت)
+# القاموس بالأسماء الدقيقة
 surah_map = {
-  "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
+    "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
     "هود": 11, "يوسف": 12, "الرعد": 13, "إبراهيم": 14, "الحجر": 15,
     "النحل": 16, "الإسراء": 17, "الكهف": 18, "مريم": 19, "طه": 20,
@@ -35,6 +52,10 @@ surah_map = {
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
 @bot.event
+async def on_ready():
+    print(f'✅ {bot.user} متصل الآن بنجاح!')
+
+@bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
@@ -48,27 +69,25 @@ async def on_message(message):
             surah_id = surah_map.get(surah_name)
 
             if surah_id:
-                # رابط لجلب الصورة مباشرة (هذا الرابط يعطي صورة الآية بالرسم العثماني)
+                # رابط الصورة المباشرة للآية (يحل مشكلة البسملة)
                 image_url = f"https://cdn.islamic.network/quran/images/1/{surah_id}_{ayah_num}.png"
                 
-                # نتحقق إذا كانت الآية موجودة فعلاً
-                check_res = requests.get(f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}")
-                
-                if check_res.status_code == 200:
-                    data = check_res.json()['data']
-                    embed = discord.Embed(
-                        title=f"📖 {data['surah']['name']} - آية {data['numberInSurah']}",
-                        color=discord.Color.green()
-                    )
-                    embed.set_image(url=image_url) # وضع صورة الآية داخل الرسالة
-                    await message.channel.send(embed=embed)
+                # التحقق من وجود الآية
+                check = requests.get(f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}")
+                if check.status_code == 200:
+                    embed = discord.Embed(color=discord.Color.gold())
+                    embed.set_image(url=image_url)
+                    await message.channel.send(f"📖 **سورة {surah_name} - آية {ayah_num}**", embed=embed)
                 else:
-                    await message.channel.send(f"⚠️ {message.author.mention} الآية غير موجودة.", delete_after=5)
+                    await message.channel.send("⚠️ الآية غير موجودة.", delete_after=5)
             else:
-                # التنبيه الذي طلبته (Dismiss style باستخدام الحذف التلقائي)
-                await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة اسم السورة بدقة (مثال: الإنسان : 1).", delete_after=10)
+                # التنبيه الذي طلبته (سيحذف نفسه لمحاكاة الـ Dismiss في النظام العادي)
+                msg = await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة الاسم بدقة (آ إ أ ؤ ئ ة).")
+                await msg.delete(delay=10)
 
         except Exception as e:
             print(f"Error: {e}")
 
+# تشغيل السيرفر والبوت
+keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

@@ -69,8 +69,13 @@ async def on_message(message):
                 data = res.json()['data']
                 await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
             else:
-                await message.channel.send("⚠️ تأكد من اسم السورة أو رقم الآية (مثال: الفاتحة : 1)")
-        except: pass
-
+                # هذا هو الجزء الخاص بالتنبيه الذي طلبته
+                تنبيه = (
+                    "⚠️ **لم أستطع العثور على السورة.**\n"
+                    "يرجى التأكد من كتابة الاسم بشكل صحيح مع مراعاة الحروف مثل: ( آ إ أ ؤ ئ ة )\n"
+                )
+                await message.channel.send(تنبيه)
+        except Exception as e:
+            print(f"Error: {e}")
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

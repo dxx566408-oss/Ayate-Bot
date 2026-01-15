@@ -5,7 +5,7 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. حل مشكلة Render (فتح البورت)
+# حل مشكلة رندر (Render) لفتح البورت
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
@@ -18,12 +18,12 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# 2. إعدادات البوت
+# إعدادات البوت
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس بالأسماء الدقيقة (أضف بقية السور هنا)
+# القاموس (أضف بقية السور هنا بالأسماء الدقيقة)
 surah_map = {
     "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -52,7 +52,7 @@ surah_map = {
 
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user} جاهز للعمل!')
+    print(f'✅ {bot.user} يعمل الآن بنظام النص المباشر!')
 
 @bot.event
 async def on_message(message):
@@ -68,23 +68,31 @@ async def on_message(message):
             surah_id = surah_map.get(surah_name)
 
             if surah_id:
-                # رابط صورة الآية
-                image_url = f"https://ayate-api.vercel.app/api/image/{surah_id}/{ayah_num}"
-                
-                # إعداد الإيمبد للصورة فقط
-                embed = discord.Embed(color=discord.Color.dark_gold())
-                embed.set_image(url=image_url)
-                
-                # إرسال النص خارج الإيمبد والصورة داخله
-                await message.channel.send(content=f"📖 **سورة {surah_name} - آية {ayah_num}**", embed=embed)
+                # طلب النص المبسط (بدون تشكيل معقد وبدون إضافات)
+                url = f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}/ar.quran-simple"
+                res = requests.get(url)
+
+                if res.status_code == 200:
+                    data = res.json()['data']
+                    ayah_text = data['text']
+
+                    # إزالة البسملة إذا كانت في بداية النص (وليست الفاتحة آية 1)
+                    basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
+                    if ayah_text.startswith(basmala) and not (surah_id == 1 and ayah_num == "1"):
+                        ayah_text = ayah_text.replace(basmala, "").strip()
+
+                    # إرسال الرد كنص عادي مباشر
+                    await message.channel.send(f"📖 **سورة {surah_name} - آية {ayah_num}**\n\n{ayah_text}")
+                else:
+                    await message.channel.send(f"⚠️ الآية رقم {ayah_num} غير موجودة في سورة {surah_name}.", delete_after=5)
             else:
-                # تنبيه يختفي بعد 10 ثواني
+                # تنبيه يختفي بعد 10 ثواني (Dismiss style)
                 تنبيه = await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة اسم السورة بدقة (مثال: الإنسان : 1).")
                 await تنبيه.delete(delay=10)
 
         except Exception as e:
             print(f"حدث خطأ: {e}")
 
-# تشغيل المساعد والبوت
+# تشغيل السيرفر والبوت
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

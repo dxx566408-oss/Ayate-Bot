@@ -2,17 +2,15 @@ import discord
 from discord.ext import commands
 import requests
 import os
-from flask import Flask
-from threading import Thread
 
 # إعدادات البوت
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس بالأسماء الدقيقة (114 سورة)
+# القاموس (تأكد من كتابة الأسماء بدقة كما طلبت)
 surah_map = {
-    "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
+  "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
     "هود": 11, "يوسف": 12, "الرعد": 13, "إبراهيم": 14, "الحجر": 15,
     "النحل": 16, "الإسراء": 17, "الكهف": 18, "مريم": 19, "طه": 20,
@@ -36,14 +34,8 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
-
-@bot.event
-async def on_ready():
-    print(f'✅ البوت {bot.user} جاهز للعمل!')
-
 @bot.event
 async def on_message(message):
-    # منع البوت من الرد على نفسه لتجنب التكرار
     if message.author == bot.user:
         return
 
@@ -53,35 +45,30 @@ async def on_message(message):
             surah_name = parts[0].strip()
             ayah_num = parts[1].strip()
 
-            # البحث عن رقم السورة في القاموس
             surah_id = surah_map.get(surah_name)
 
             if surah_id:
-                url = f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}/ar.alafasy"
-                res = requests.get(url)
-
-                if res.status_code == 200:
-                    data = res.json()['data']
-                    await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
+                # رابط لجلب الصورة مباشرة (هذا الرابط يعطي صورة الآية بالرسم العثماني)
+                image_url = f"https://cdn.islamic.network/quran/images/1/{surah_id}_{ayah_num}.png"
+                
+                # نتحقق إذا كانت الآية موجودة فعلاً
+                check_res = requests.get(f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}")
+                
+                if check_res.status_code == 200:
+                    data = check_res.json()['data']
+                    embed = discord.Embed(
+                        title=f"📖 {data['surah']['name']} - آية {data['numberInSurah']}",
+                        color=discord.Color.green()
+                    )
+                    embed.set_image(url=image_url) # وضع صورة الآية داخل الرسالة
+                    await message.channel.send(embed=embed)
                 else:
-                    # رسالة تنبيه عند عدم وجود الآية
-                    await message.channel.send(f"⚠️ {message.author.mention} لم أجد الآية رقم {ayah_num} في سورة {surah_name}.", delete_after=10)
+                    await message.channel.send(f"⚠️ {message.author.mention} الآية غير موجودة.", delete_after=5)
             else:
-                # رسالة تنبيه عند خطأ في اسم السورة (تختفي بعد 10 ثواني)
-                تنبيه = f"⚠️ {message.author.mention} اسم السورة مكتوب بشكل غير دقيق (تأكد من الهمزات والتاء المربوطة).\nمثال: `الإنسان : 1` أو `الفاتحة : 1`"
-                await message.channel.send(تنبيه, delete_after=10)
+                # التنبيه الذي طلبته (Dismiss style باستخدام الحذف التلقائي)
+                await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة اسم السورة بدقة (مثال: الإنسان : 1).", delete_after=10)
 
         except Exception as e:
             print(f"Error: {e}")
 
-# Keep Alive لضمان استمرار عمل البوت
-app = Flask('')
-@app.route('/')
-def home(): return "Bot is running"
-def run(): app.run(host='0.0.0.0', port=10000)
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

@@ -24,31 +24,38 @@ async def on_ready():
     print(f'✅ {bot.user} is connected and ready!')
 
 @bot.event
+@bot.event
 async def on_message(message):
-    # تجاهل رسائل البوت نفسه
     if message.author == bot.user:
         return
 
-    # البحث عن النقطتين : لضمان أن المستخدم يطلب آية
     if ":" in message.content:
         try:
-            # تقسيم الرسالة (مثال: الفاتحة : 1)
             parts = message.content.split(":")
-            surah_name = parts[0].strip()
+            # تنظيف النص من المسافات وأي حروف زائدة
+            surah_input = parts[0].strip()
             ayah_num = parts[1].strip()
 
-            # جلب الآية من API القرآن الكريم بصوت العفاسي (نصي)
-            url = f"https://api.alquran.cloud/v1/ayah/{surah_name}:{ayah_num}/ar.alafasy"
+            # محاولة جلب البيانات (الـ API يدعم الاسم العربي مباشرة إذا كان دقيقاً)
+            url = f"https://api.alquran.cloud/v1/ayah/{surah_input}:{ayah_num}/ar.alafasy"
             response = requests.get(url)
             
             if response.status_code == 200:
                 data = response.json()['data']
-                # تنسيق الرد بشكل جميل
                 reply = f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}"
                 await message.channel.send(reply)
             else:
-                # إذا لم يجد السورة أو الآية
-                await message.channel.send("⚠️ لم أجد هذه الآية. تأكد من كتابة: (اسم السورة : رقم الآية).")
+                # محاولة أخرى: إذا فشل بالاسم، ربما بسبب "الـ" التعريف، نقوم بحذفها وتجربة البحث مجدداً
+                if surah_input.startswith("ال"):
+                    alt_surah = surah_input[2:] # حذف "ال"
+                    url = f"https://api.alquran.cloud/v1/ayah/{alt_surah}:{ayah_num}/ar.alafasy"
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        data = response.json()['data']
+                        await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
+                        return
+                
+                await message.channel.send("⚠️ لم أجد هذه السورة. جرب كتابة الاسم بدون 'الـ' (مثلاً: فاتحة : 1) أو تأكد من الإملاء.")
         except Exception as e:
             print(f"Error: {e}")
 

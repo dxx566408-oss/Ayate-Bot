@@ -5,13 +5,12 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. حل مشكلة Render (ضروري جداً لكي لا يتوقف البوت)
+# 1. حل مشكلة Render (فتح البورت)
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
 
 def run():
-    # Render يستخدم بورت 10000 افتراضياً
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
@@ -24,7 +23,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس الدقيق (أضف السور التي تريدها هنا بنفس النمط)
+# القاموس بالأسماء الدقيقة (أضف بقية السور هنا)
 surah_map = {
     "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -53,7 +52,7 @@ surah_map = {
 
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user} جاهز وبدأ العمل!')
+    print(f'✅ {bot.user} جاهز للعمل!')
 
 @bot.event
 async def on_message(message):
@@ -69,25 +68,23 @@ async def on_message(message):
             surah_id = surah_map.get(surah_name)
 
             if surah_id:
-                # استخدمنا هذا الرابط لأنه الأكثر استقراراً لصور الآيات بالرسم العثماني
+                # رابط صورة الآية
                 image_url = f"https://ayate-api.vercel.app/api/image/{surah_id}/{ayah_num}"
                 
-                # إرسال الصورة داخل Embed مرتب
-                embed = discord.Embed(
-                    title=f"📖 سورة {surah_name} - آية {ayah_num}",
-                    color=discord.Color.dark_gold()
-                )
+                # إعداد الإيمبد للصورة فقط
+                embed = discord.Embed(color=discord.Color.dark_gold())
                 embed.set_image(url=image_url)
                 
-                await message.channel.send(embed=embed)
+                # إرسال النص خارج الإيمبد والصورة داخله
+                await message.channel.send(content=f"📖 **سورة {surah_name} - آية {ayah_num}**", embed=embed)
             else:
-                # رسالة تنبيه تحذف نفسها بعد 10 ثواني (محاكاة للـ Dismiss)
-                تنبيه = await message.channel.send(f"⚠️ {message.author.mention} لم أجد السورة. تأكد من كتابة الاسم بدقة (آ إ أ ؤ ئ ة).")
+                # تنبيه يختفي بعد 10 ثواني
+                تنبيه = await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة اسم السورة بدقة (مثال: الإنسان : 1).")
                 await تنبيه.delete(delay=10)
 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"حدث خطأ: {e}")
 
-# تشغيل السيرفر المساعد ثم البوت
+# تشغيل المساعد والبوت
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

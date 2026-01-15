@@ -5,7 +5,7 @@ import os
 from flask import Flask
 from threading import Thread
 
-# حل مشكلة رندر (Render) لفتح البورت
+# حل مشكلة رندر (Render)
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
@@ -23,9 +23,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس (أضف بقية السور هنا بالأسماء الدقيقة)
+# القاموس (أضف بقية السور هنا)
 surah_map = {
-    "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
+  "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
     "هود": 11, "يوسف": 12, "الرعد": 13, "إبراهيم": 14, "الحجر": 15,
     "النحل": 16, "الإسراء": 17, "الكهف": 18, "مريم": 19, "طه": 20,
@@ -49,10 +49,9 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
-
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user} يعمل الآن بنظام النص المباشر!')
+    print(f'✅ {bot.user} يعمل الآن بنظام النص المباشر والبسملة العلوية!')
 
 @bot.event
 async def on_message(message):
@@ -68,31 +67,35 @@ async def on_message(message):
             surah_id = surah_map.get(surah_name)
 
             if surah_id:
-                # طلب النص المبسط (بدون تشكيل معقد وبدون إضافات)
                 url = f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}/ar.quran-simple"
                 res = requests.get(url)
 
                 if res.status_code == 200:
                     data = res.json()['data']
                     ayah_text = data['text']
-
-                    # إزالة البسملة إذا كانت في بداية النص (وليست الفاتحة آية 1)
                     basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
+                    
+                    header = f"📖 **سورة {surah_name} - آية {ayah_num}**"
+                    
+                    # التحقق من وجود البسملة في النص
                     if ayah_text.startswith(basmala) and not (surah_id == 1 and ayah_num == "1"):
+                        # حذفها من النص الأصلي ووضعها في سطر صغير فوقه
                         ayah_text = ayah_text.replace(basmala, "").strip()
+                        final_response = f"{header}\n`{basmala}`\n\n{ayah_text}"
+                    else:
+                        # إذا لم توجد بسملة (أو كانت الفاتحة 1)
+                        final_response = f"{header}\n\n{ayah_text}"
 
-                    # إرسال الرد كنص عادي مباشر
-                    await message.channel.send(f"📖 **سورة {surah_name} - آية {ayah_num}**\n\n{ayah_text}")
+                    await message.channel.send(final_response)
                 else:
-                    await message.channel.send(f"⚠️ الآية رقم {ayah_num} غير موجودة في سورة {surah_name}.", delete_after=5)
+                    await message.channel.send(f"⚠️ الآية {ayah_num} غير موجودة في سورة {surah_name}.", delete_after=5)
             else:
-                # تنبيه يختفي بعد 10 ثواني (Dismiss style)
-                تنبيه = await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة اسم السورة بدقة (مثال: الإنسان : 1).")
+                # تنبيه يختفي (Dismiss style)
+                تنبيه = await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة الاسم بدقة بالهمزات (مثل: الإنسان : 1).")
                 await تنبيه.delete(delay=10)
 
         except Exception as e:
-            print(f"حدث خطأ: {e}")
+            print(f"Error: {e}")
 
-# تشغيل السيرفر والبوت
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

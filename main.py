@@ -5,14 +5,13 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. حل مشكلة Render (فتح بورت للمنصة)
+# 1. حل مشكلة Render (ضروري جداً لكي لا يتوقف البوت)
 app = Flask('')
 @app.route('/')
-def home():
-    return "Bot is running!"
+def home(): return "Bot is Alive!"
 
 def run():
-    # Render يتطلب بورت 10000 افتراضياً أو Port من المتغيرات
+    # Render يستخدم بورت 10000 افتراضياً
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
@@ -25,7 +24,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس بالأسماء الدقيقة
+# القاموس الدقيق (أضف السور التي تريدها هنا بنفس النمط)
 surah_map = {
     "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -51,9 +50,10 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
+
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user} متصل الآن بنجاح!')
+    print(f'✅ {bot.user} جاهز وبدأ العمل!')
 
 @bot.event
 async def on_message(message):
@@ -69,25 +69,25 @@ async def on_message(message):
             surah_id = surah_map.get(surah_name)
 
             if surah_id:
-                # رابط الصورة المباشرة للآية (يحل مشكلة البسملة)
-                image_url = f"https://cdn.islamic.network/quran/images/1/{surah_id}_{ayah_num}.png"
+                # استخدمنا هذا الرابط لأنه الأكثر استقراراً لصور الآيات بالرسم العثماني
+                image_url = f"https://ayate-api.vercel.app/api/image/{surah_id}/{ayah_num}"
                 
-                # التحقق من وجود الآية
-                check = requests.get(f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}")
-                if check.status_code == 200:
-                    embed = discord.Embed(color=discord.Color.gold())
-                    embed.set_image(url=image_url)
-                    await message.channel.send(f"📖 **سورة {surah_name} - آية {ayah_num}**", embed=embed)
-                else:
-                    await message.channel.send("⚠️ الآية غير موجودة.", delete_after=5)
+                # إرسال الصورة داخل Embed مرتب
+                embed = discord.Embed(
+                    title=f"📖 سورة {surah_name} - آية {ayah_num}",
+                    color=discord.Color.dark_gold()
+                )
+                embed.set_image(url=image_url)
+                
+                await message.channel.send(embed=embed)
             else:
-                # التنبيه الذي طلبته (سيحذف نفسه لمحاكاة الـ Dismiss في النظام العادي)
-                msg = await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة الاسم بدقة (آ إ أ ؤ ئ ة).")
-                await msg.delete(delay=10)
+                # رسالة تنبيه تحذف نفسها بعد 10 ثواني (محاكاة للـ Dismiss)
+                تنبيه = await message.channel.send(f"⚠️ {message.author.mention} لم أجد السورة. تأكد من كتابة الاسم بدقة (آ إ أ ؤ ئ ة).")
+                await تنبيه.delete(delay=10)
 
         except Exception as e:
             print(f"Error: {e}")
 
-# تشغيل السيرفر والبوت
+# تشغيل السيرفر المساعد ثم البوت
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

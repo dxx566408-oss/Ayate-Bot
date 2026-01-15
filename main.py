@@ -68,11 +68,11 @@ async def on_message(message):
             if res.status_code == 200:
                 data = res.json()['data']
                 await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
-            else:
-                # هذا هو الجزء الخاص بالتنبيه الذي طلبته
-                تنبيه = (
-                    "⚠️ **لم أستطع العثور على السورة.**\n"
-                    "يرجى التأكد من كتابة الاسم بشكل صحيح مع مراعاة الحروف مثل: ( آ إ أ ؤ ئ ة )\n"
+           else:
+                # هذه الرسالة ستظهر للمستخدم فقط مع خيار Dismiss message
+                await interaction.response.send_message(
+                    "⚠️ **تأكد من الحروف مثل: ( آ إ أ ؤ ئ ة )**\nمثال: `الفاتحة : 1`", 
+                    ephemeral=True
                 )
                 await message.channel.send(تنبيه)
         except Exception as e:

@@ -1,11 +1,12 @@
 import discord
 from discord.ext import commands
+from discord.ui import Button, View
 import requests
 import os
 from flask import Flask
 from threading import Thread
 
-# حل مشكلة رندر (Render)
+# 1. حل مشكلة Render (فتح البورت)
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
@@ -18,12 +19,12 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# إعدادات البوت
+# 2. إعدادات البوت
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس (أضف بقية السور هنا)
+# القاموس (أضف السور هنا بالأسماء الدقيقة)
 surah_map = {
   "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -49,9 +50,29 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
-@bot.event
-async def on_ready():
-    print(f'✅ {bot.user} يعمل الآن بنظام النص المباشر والبسملة العلوية!')
+# 3. واجهة الأزرار (تفسير ونسخ)
+class AyahActions(View):
+    def __init__(self, surah_id, ayah_num, text):
+        super().__init__(timeout=None)
+        self.surah_id = surah_id
+        self.ayah_num = ayah_num
+        self.text = text
+
+    @discord.ui.button(label="تفسير الآية", style=discord.ButtonStyle.primary, emoji="📖")
+    async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # جلب التفسير (تفسير الميسر)
+        url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.jalalayn"
+        res = requests.get(url)
+        if res.status_code == 200:
+            tafsir_text = res.json()['data']['text']
+            await interaction.response.send_message(f"📑 **التفسير:**\n{tafsir_text}", ephemeral=True)
+        else:
+            await interaction.response.send_message("⚠️ عذراً، لم أستطع جلب التفسير حالياً.", ephemeral=True)
+
+    @discord.ui.button(label="نسخ الآية", style=discord.ButtonStyle.secondary, emoji="📋")
+    async def copy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # إرسال النص في رسالة مخفية لسهولة النسخ
+        await interaction.response.send_message(f"يمكنك نسخ النص من هنا:\n`{self.text}`", ephemeral=True)
 
 @bot.event
 async def on_message(message):
@@ -63,37 +84,32 @@ async def on_message(message):
             parts = message.content.split(":")
             surah_name = parts[0].strip()
             ayah_num = parts[1].strip()
-
             surah_id = surah_map.get(surah_name)
 
             if surah_id:
                 url = f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}/ar.quran-simple"
                 res = requests.get(url)
-
+                
                 if res.status_code == 200:
                     data = res.json()['data']
                     ayah_text = data['text']
-                    basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
                     
-                    header = f"📖 **سورة {surah_name} - آية {ayah_num}**"
+                    # إنشاء الإطار (Embed)
+                    embed = discord.Embed(
+                        title=f"سورة {surah_name} - آية {ayah_num}",
+                        description=f"**{ayah_text}**",
+                        color=discord.Color.gold()
+                    )
+                    embed.set_footer(text="استخدم الأزرار بالأسفل للمزيد")
                     
-                    # التحقق من وجود البسملة في النص
-                    if ayah_text.startswith(basmala) and not (surah_id == 1 and ayah_num == "1"):
-                        # حذفها من النص الأصلي ووضعها في سطر صغير فوقه
-                        ayah_text = ayah_text.replace(basmala, "").strip()
-                        final_response = f"{header}\n`{basmala}`\n\n{ayah_text}"
-                    else:
-                        # إذا لم توجد بسملة (أو كانت الفاتحة 1)
-                        final_response = f"{header}\n\n{ayah_text}"
-
-                    await message.channel.send(final_response)
+                    # إنشاء الأزرار
+                    view = AyahActions(surah_id, ayah_num, ayah_text)
+                    
+                    await message.channel.send(embed=embed, view=view)
                 else:
-                    await message.channel.send(f"⚠️ الآية {ayah_num} غير موجودة في سورة {surah_name}.", delete_after=5)
+                    await message.channel.send("⚠️ لم أجد هذه الآية.", delete_after=5)
             else:
-                # تنبيه يختفي (Dismiss style)
-                تنبيه = await message.channel.send(f"⚠️ {message.author.mention} تأكد من كتابة الاسم بدقة بالهمزات (مثل: الإنسان : 1).")
-                await تنبيه.delete(delay=10)
-
+                await message.channel.send(f"⚠️ تأكد من كتابة اسم السورة بدقة بالهمزات (مثل: الإنسان : 1).", delete_after=10)
         except Exception as e:
             print(f"Error: {e}")
 

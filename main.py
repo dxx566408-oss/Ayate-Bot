@@ -68,7 +68,7 @@ async def on_message(message):
             if res.status_code == 200:
                 data = res.json()['data']
                 await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
-           else:
+            else:
                 # هذه الرسالة ستظهر للمستخدم فقط مع خيار Dismiss message
                 await interaction.response.send_message(
                     "⚠️ **تأكد من الحروف مثل: ( آ إ أ ؤ ئ ة )**\nمثال: `الفاتحة : 1`", 

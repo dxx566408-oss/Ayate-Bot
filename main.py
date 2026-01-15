@@ -26,18 +26,11 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    if message.author == bot.user: return
-    if ":" in message.content:
-        try:
-            parts = message.content.split(":")
-            surah, ayah = parts[0].strip(), parts[1].strip()
-            url = f"https://api.alquran.cloud/v1/ayah/{surah}:{ayah}/ar.alafasy"
-            res = requests.get(url)
-            if res.status_code == 200:
-                data = res.json()['data']
-                await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
-        except: pass
-    await bot.process_commands(message)
+    if message.author == bot.user:
+        return
+    
+    # سيقوم البوت بالرد على أي رسالة ترسلها بكلمة "وصلت"
+    await message.channel.send(f"وصلت رسالتك: {message.content}")
 
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

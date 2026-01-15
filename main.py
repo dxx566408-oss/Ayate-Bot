@@ -5,20 +5,12 @@ import os
 from flask import Flask
 from threading import Thread
 
-# --- إبقاء البوت حياً ---
-app = Flask('')
-@app.route('/')
-def home(): return "Bot is Online!"
-def run(): app.run(host='0.0.0.0', port=10000)
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
+# إعدادات البوت
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# قاموس لترجمة أسماء السور لأرقام (أضفنا أشهرها ويمكنك زيادة الباقي)
+# القاموس بالأسماء الدقيقة (114 سورة)
 surah_map = {
     "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -27,7 +19,7 @@ surah_map = {
     "الأنبياء": 21, "الحج": 22, "المؤمنون": 23, "النور": 24, "الفرقان": 25,
     "الشعراء": 26, "النمل": 27, "القصص": 28, "العنكبوت": 29, "الروم": 30,
     "لقمان": 31, "السجدة": 32, "الأحزاب": 33, "سبأ": 34, "فاطر": 35,
-    "يس": 36, "الصافات": 37, "ص": 38, "الزمر": 39, "غافر": 40,
+    "يس": 36, "الصافات": 37, "ص": 38, "الزمير": 39, "غافر": 40,
     "فصلت": 41, "الشورى": 42, "الزخرف": 43, "الدخان": 44, "الجاثية": 45,
     "الأحقاف": 46, "محمد": 47, "الفتح": 48, "الحجرات": 49, "ق": 50,
     "الذاريات": 51, "الطور": 52, "النجم": 53, "القمر": 54, "الرحمن": 55,
@@ -47,35 +39,49 @@ surah_map = {
 
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user} is ready!')
+    print(f'✅ البوت {bot.user} جاهز للعمل!')
 
 @bot.event
 async def on_message(message):
-    if message.author == bot.user: return
+    # منع البوت من الرد على نفسه لتجنب التكرار
+    if message.author == bot.user:
+        return
 
     if ":" in message.content:
         try:
             parts = message.content.split(":")
-            name = parts[0].strip()
-            ayah = parts[1].strip()
+            surah_name = parts[0].strip()
+            ayah_num = parts[1].strip()
 
-            # تحويل الاسم لرقم إذا كان موجوداً في القاموس
-            target = surah_map.get(name, name)
+            # البحث عن رقم السورة في القاموس
+            surah_id = surah_map.get(surah_name)
 
-            url = f"https://api.alquran.cloud/v1/ayah/{target}:{ayah}/ar.alafasy"
-            res = requests.get(url)
-            
-            if res.status_code == 200:
-                data = res.json()['data']
-                await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
+            if surah_id:
+                url = f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}/ar.alafasy"
+                res = requests.get(url)
+
+                if res.status_code == 200:
+                    data = res.json()['data']
+                    await message.channel.send(f"📖 **{data['surah']['name']}** (آية {data['numberInSurah']}):\n> {data['text']}")
+                else:
+                    # رسالة تنبيه عند عدم وجود الآية
+                    await message.channel.send(f"⚠️ {message.author.mention} لم أجد الآية رقم {ayah_num} في سورة {surah_name}.", delete_after=10)
             else:
-                # هذه الرسالة ستظهر للمستخدم فقط مع خيار Dismiss message
-                await interaction.response.send_message(
-                    "⚠️ **تأكد من الحروف مثل: ( آ إ أ ؤ ئ ة )**\nمثال: `الفاتحة : 1`", 
-                    ephemeral=True
-                )
-                await message.channel.send(تنبيه)
+                # رسالة تنبيه عند خطأ في اسم السورة (تختفي بعد 10 ثواني)
+                تنبيه = f"⚠️ {message.author.mention} اسم السورة مكتوب بشكل غير دقيق (تأكد من الهمزات والتاء المربوطة).\nمثال: `الإنسان : 1` أو `الفاتحة : 1`"
+                await message.channel.send(تنبيه, delete_after=10)
+
         except Exception as e:
             print(f"Error: {e}")
+
+# Keep Alive لضمان استمرار عمل البوت
+app = Flask('')
+@app.route('/')
+def home(): return "Bot is running"
+def run(): app.run(host='0.0.0.0', port=8080)
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

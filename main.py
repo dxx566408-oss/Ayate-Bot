@@ -107,7 +107,7 @@ async def on_message(message):
                     url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/ar.quran-simple"
                     res = requests.get(url)
                     
-                  if res.status_code == 200:
+                    if res.status_code == 200:
                         data = res.json()['data']
                         ayah_text = data['text']
                         

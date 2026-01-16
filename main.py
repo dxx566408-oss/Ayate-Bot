@@ -55,12 +55,28 @@ surah_map = {
 }
 # 3. واجهة الأزرار (تفسير + استماع)
 class AyahActions(View):
-    def __init__(self, surah_id, ayah_num, real_name):
+    def __init__(self, surah_id, ayah_num, real_name, total_ayahs):
         super().__init__(timeout=None)
         self.surah_id = surah_id
-        self.ayah_num = ayah_num
+        self.ayah_num = int(ayah_num)
         self.real_name = real_name
+        self.total_ayahs = total_ayahs
 
+        # تعطيل زر "السابقة" إذا كنا في الآية رقم 1
+        if self.ayah_num <= 1:
+            self.prev_button.disabled = True
+        
+        # تعطيل زر "التالية" إذا كنا في آخر آية بالسورة
+        if self.ayah_num >= self.total_ayahs:
+            self.next_button.disabled = True
+
+    @discord.ui.button(label="آية سابقة", style=discord.ButtonStyle.secondary, emoji="⬅️")
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.navigate_ayah(interaction, self.ayah_num - 1)
+
+    @discord.ui.button(label="آية تالية", style=discord.ButtonStyle.secondary, emoji="➡️")
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.navigate_ayah(interaction, self.ayah_num + 1)
     @discord.ui.button(label="تفسير الميسر", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.muyassar"

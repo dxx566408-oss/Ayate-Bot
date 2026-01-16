@@ -73,21 +73,30 @@ class AyahActions(View):
         # إرسال النص في رسالة مخفية لسهولة النسخ
         await interaction.response.send_message(f"يمكنك نسخ النص من هنا:\n`{self.text}`", ephemeral=True)
 
-@bot.event
 async def on_message(message):
-    if target_surah_id:
-                url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/ar.quran-simple"
-                res = requests.get(url)
+    if message.author == bot.user: return
+
+    # التحقق من وجود النقطتين وأن الرسالة ليست مجرد رمز تعبيري أو كلام عشوائي
+    if ":" in message.content:
+        parts = message.content.split(":")
+        
+        # التأكد أن الرسالة مقسمة لجزئين فقط (قبل وبعد النقطتين)
+        if len(parts) == 2:
+            raw_surah = parts[0].strip()
+            raw_ayah = parts[1].strip()
+
+            # التحقق من أن ما بعد النقطتين هو رقم فعلي (رقم الآية)
+            if raw_ayah.isdigit():
+                ayah_num = raw_ayah
                 
-                if res.status_code == 200:
-                    data = res.json()['data']
-                    ayah_text = data['text']
-                    
-                    # نص البسملة الثابت
-                    basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
-                    
-                    # تنظيف الآية من البسملة إذا كانت موجودة أصلاً في النص القادم من الموقع
-                    clean_ayah = ayah_text.replace(basmala, "").strip()
+                # البحث عن اسم السورة في القاموس
+                target_surah_id = None
+                clean_input = clean_text(raw_surah)
+                for name, s_id in surah_map.items():
+                    if clean_text(name) == clean_input:
+                        target_surah_id = s_id
+                        real_name = name
+                        break
 
                     # تنسيق الوصف: البسملة في سطر مستقل بخط صغير (Code Block)
                     # ثم نص الآية بخط عريض تحتها

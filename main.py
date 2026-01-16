@@ -72,18 +72,36 @@ class AyahActions(View):
 
     @discord.ui.button(label="استماع للآية", style=discord.ButtonStyle.success, emoji="🎙️")
     async def audio_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # رابط الصوت (بصوت العفاسي)
-        audio_url = f"https://cdn.islamic.network/quran/audio/128/ar.alafasy/{self.surah_id * 1000 + int(self.ayah_num)}.mp3"
-        # تم استخدام عملية حسابية بسيطة لجلب رقم الآية التسلسلي في المصحف
-        # أو نطلب الرابط مباشرة من الـ API لضمان الدقة:
+        # 1. تأجيل الرد لأن تحميل الملف قد يستغرق ثواني
+        await interaction.response.defer(ephemeral=True)
+        
+        # 2. الحصول على رابط الصوت من الـ API
         api_url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.alafasy"
         res = requests.get(api_url)
         
         if res.status_code == 200:
-            audio_link = res.json()['data']['audio']
-            await interaction.response.send_message(f"🔊 **تلاوة الآية بصوت الشيخ مشاري العفاسي:**\n{audio_link}", ephemeral=True)
+            audio_url = res.json()['data']['audio']
+            
+            # 3. تحميل ملف الصوت برمجياً لإرساله كملف وليس كرابط
+            audio_res = requests.get(audio_url)
+            if audio_res.status_code == 200:
+                from io import BytesIO
+                audio_file = BytesIO(audio_res.content)
+                
+                # اسم الملف الذي سيظهر في ديسكورد
+                filename = f"{self.surah_id}_{self.ayah_num}.mp3"
+                
+                # 4. إرسال الملف الصوتي كرسالة مخفية
+                file = discord.File(audio_file, filename=filename)
+                await interaction.followup.send(
+                    content=f"🔊 **تلاوة الآية بصوت الشيخ مشاري العفاسي:**",
+                    file=file,
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send("⚠️ تعذر تحميل ملف الصوت حالياً.", ephemeral=True)
         else:
-            await interaction.response.send_message("⚠️ عذراً، تعذر جلب الملف الصوتي.", ephemeral=True)
+            await interaction.followup.send("⚠️ عذراً، لم أجد ملفاً صوتياً لهذه الآية.", ephemeral=True)
 
 # 4. معالجة الرسائل
 @bot.event

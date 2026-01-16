@@ -107,24 +107,27 @@ async def on_message(message):
                     url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/ar.quran-simple"
                     res = requests.get(url)
                     
-                    if res.status_code == 200:
+                  if res.status_code == 200:
                         data = res.json()['data']
                         ayah_text = data['text']
-                        basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
                         
-                        clean_ayah = ayah_text.replace(basmala, "").strip()
+                        # البسملة التي سنستخدمها كعنوان
+                        standard_basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
                         
-                        # تنسيق البسملة والآية بخط طبيعي وعريض
-                        if target_surah_id != 1 and target_surah_id != 9:
-                            formatted_desc = f"**{basmala}**\n\n**{clean_ayah}**"
+                        # 1. تنظيف النص: إذا كانت الآية تبدأ بالبسملة، نحذفها تماماً من النص
+                        if ayah_text.startswith(standard_basmala):
+                            # قص البسملة من البداية ليبقى نص الآية فقط (مثل: الم)
+                            clean_ayah = ayah_text[len(standard_basmala):].strip()
                         else:
-                            formatted_desc = f"**{ayah_text}**"
+                            clean_ayah = ayah_text
 
-                        embed = discord.Embed(
-                            title=f"📖 سورة {real_name} - آية {ayah_num}",
-                            description=formatted_desc,
-                            color=discord.Color.blue()
-                        )
+                        # 2. التنسيق: عرض بسملة واحدة فقط فوق الآية
+                        if target_surah_id != 1 and target_surah_id != 9:
+                            # وضع البسملة في الأعلى بخط عريض، وتحتها نص الآية نظيف
+                            formatted_desc = f"**{standard_basmala}**\n\n**{clean_ayah}**"
+                        else:
+                            # سورة الفاتحة (1) وسورة التوبة (9) تظهر كما هي بلا تدخل
+                            formatted_desc = f"**{ayah_text}**"
                         
                         view = AyahActions(target_surah_id, ayah_num, clean_ayah, real_name)
                         await message.channel.send(embed=embed, view=view)

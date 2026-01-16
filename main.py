@@ -75,35 +75,36 @@ class AyahActions(View):
 
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    if ":" in message.content:
-        try:
-            parts = message.content.split(":")
-            surah_name = parts[0].strip()
-            ayah_num = parts[1].strip()
-            surah_id = surah_map.get(surah_name)
-
-            if surah_id:
-                url = f"https://api.alquran.cloud/v1/ayah/{surah_id}:{ayah_num}/ar.quran-simple"
+    if target_surah_id:
+                url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/ar.quran-simple"
                 res = requests.get(url)
                 
                 if res.status_code == 200:
                     data = res.json()['data']
                     ayah_text = data['text']
                     
-                    # إنشاء الإطار (Embed)
+                    # نص البسملة الثابت
+                    basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
+                    
+                    # تنظيف الآية من البسملة إذا كانت موجودة أصلاً في النص القادم من الموقع
+                    clean_ayah = ayah_text.replace(basmala, "").strip()
+
+                    # تنسيق الوصف: البسملة في سطر مستقل بخط صغير (Code Block)
+                    # ثم نص الآية بخط عريض تحتها
+                    if target_surah_id != 1 and target_surah_id != 9:
+                        formatted_desc = f"`{basmala}`\n\n**{clean_ayah}**"
+                    else:
+                        # في الفاتحة (1) تظهر كآية، وفي التوبة (9) لا توجد بسملة
+                        formatted_desc = f"**{ayah_text}**"
+
                     embed = discord.Embed(
-                        title=f"سورة {surah_name} - آية {ayah_num}",
-                        description=f"**{ayah_text}**",
-                        color=discord.Color.gold()
+                        title=f"📖 سورة {real_name} - آية {ayah_num}",
+                        description=formatted_desc,
+                        color=discord.Color.blue()
                     )
-                    embed.set_footer(text="استخدم الأزرار بالأسفل للمزيد")
                     
-                    # إنشاء الأزرار
-                    view = AyahActions(surah_id, ayah_num, ayah_text)
-                    
+                    # تأكد أن view تستخدم النص النظيف للنسخ
+                    view = AyahActions(target_surah_id, ayah_num, clean_ayah, real_name)
                     await message.channel.send(embed=embed, view=view)
                 else:
                     await message.channel.send("⚠️ لم أجد هذه الآية.", delete_after=5)

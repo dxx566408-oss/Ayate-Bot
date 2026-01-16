@@ -61,8 +61,7 @@ class AyahActions(View):
     @discord.ui.button(label="تفسير الآية", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # جلب التفسير (تفسير الميسر)
-        url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.jalalayn"
-        res = requests.get(url)
+        url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.ibnkathir"
         if res.status_code == 200:
             tafsir_text = res.json()['data']['text']
             await interaction.response.send_message(f"📑 **التفسير:**\n{tafsir_text}", ephemeral=True)

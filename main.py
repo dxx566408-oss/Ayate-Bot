@@ -24,16 +24,20 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# القاموس (أضف السور هنا بالأسماء الدقيقة)
+# دالة تنظيف النص (ضرورية لكي يعمل البحث عن السور)
+def clean_text(text):
+    return text.strip().replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
+
+# القاموس الكامل للسور
 surah_map = {
-  "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
+    "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
     "هود": 11, "يوسف": 12, "الرعد": 13, "إبراهيم": 14, "الحجر": 15,
     "النحل": 16, "الإسراء": 17, "الكهف": 18, "مريم": 19, "طه": 20,
     "الأنبياء": 21, "الحج": 22, "المؤمنون": 23, "النور": 24, "الفرقان": 25,
     "الشعراء": 26, "النمل": 27, "القصص": 28, "العنكبوت": 29, "الروم": 30,
     "لقمان": 31, "السجدة": 32, "الأحزاب": 33, "سبأ": 34, "فاطر": 35,
-    "يس": 36, "الصافات": 37, "ص": 38, "الزمير": 39, "غافر": 40,
+    "يس": 36, "الصافات": 37, "ص": 38, "الزمر": 39, "غافر": 40,
     "فصلت": 41, "الشورى": 42, "الزخرف": 43, "الدخان": 44, "الجاثية": 45,
     "الأحقاف": 46, "محمد": 47, "الفتح": 48, "الحجرات": 49, "ق": 50,
     "الذاريات": 51, "الطور": 52, "النجم": 53, "القمر": 54, "الرحمن": 55,
@@ -50,47 +54,50 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
-# 3. واجهة الأزرار (تفسير ونسخ)
+
+# 3. واجهة الأزرار (تفسير ابن كثير ونسخ)
 class AyahActions(View):
-    def __init__(self, surah_id, ayah_num, text):
+    def __init__(self, surah_id, ayah_num, text, surah_name):
         super().__init__(timeout=None)
         self.surah_id = surah_id
         self.ayah_num = ayah_num
         self.text = text
+        self.surah_name = surah_name
 
-    @discord.ui.button(label="تفسير الآية", style=discord.ButtonStyle.primary, emoji="📖")
+    @discord.ui.button(label="تفسير ابن كثير", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # جلب التفسير (تفسير الميسر)
         url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.ibnkathir"
+        res = requests.get(url)
         if res.status_code == 200:
             tafsir_text = res.json()['data']['text']
-            await interaction.response.send_message(f"📑 **التفسير:**\n{tafsir_text}", ephemeral=True)
+            # قص النص إذا كان طويلاً جداً لديسكورد
+            if len(tafsir_text) > 1900: tafsir_text = tafsir_text[:1900] + "..."
+            await interaction.response.send_message(f"📑 **تفسير ابن كثير - {self.surah_name} ({self.ayah_num}):**\n\n{tafsir_text}", ephemeral=True)
         else:
             await interaction.response.send_message("⚠️ عذراً، لم أستطع جلب التفسير حالياً.", ephemeral=True)
 
     @discord.ui.button(label="نسخ الآية", style=discord.ButtonStyle.secondary, emoji="📋")
     async def copy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # إرسال النص في رسالة مخفية لسهولة النسخ
-        await interaction.response.send_message(f"يمكنك نسخ النص من هنا:\n`{self.text}`", ephemeral=True)
+        await interaction.response.send_message(f"يمكنك نسخ الآية من هنا:\n`{self.text}`", ephemeral=True)
 
+# 4. معالجة الرسائل
+@bot.event
 async def on_message(message):
-    if message.author == bot.user: return
+    if message.author == bot.user:
+        return
 
-    # التحقق من وجود النقطتين وأن الرسالة ليست مجرد رمز تعبيري أو كلام عشوائي
- if ":" in message.content:
+    if ":" in message.content:
         try:
-            # تقسيم الرسالة للتأكد أنها بصيغة (اسم : رقم)
             parts = message.content.split(":")
-            
-            # التعديل الأهم: التأكد أن ما بعد النقطتين هو رقم (لمنع التفاعل مع الإيموجي)
+            # التأكد أن ما بعد النقطتين هو رقم (رقم الآية) لمنع التفاعل مع الإيموجي
             if len(parts) == 2 and parts[1].strip().isdigit():
                 raw_surah = parts[0].strip()
                 ayah_num = parts[1].strip()
 
                 target_surah_id = None
+                real_name = ""
                 clean_input = clean_text(raw_surah)
                 
-                # البحث عن اسم السورة في القاموس
                 for name, s_id in surah_map.items():
                     if clean_text(name) == clean_input:
                         target_surah_id = s_id
@@ -106,10 +113,9 @@ async def on_message(message):
                         ayah_text = data['text']
                         basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
                         
-                        # تنظيف نص الآية من البسملة الزائدة
                         clean_ayah = ayah_text.replace(basmala, "").strip()
                         
-                        # تنسيق الإيمبد (البسملة فوق في سطر مستقل)
+                        # تنسيق البسملة بخط صغير فوق الآية
                         if target_surah_id != 1 and target_surah_id != 9:
                             formatted_desc = f"`{basmala}`\n\n**{clean_ayah}**"
                         else:
@@ -121,16 +127,16 @@ async def on_message(message):
                             color=discord.Color.blue()
                         )
                         
-                        # إرسال الرسالة مع الأزرار
                         view = AyahActions(target_surah_id, ayah_num, clean_ayah, real_name)
                         await message.channel.send(embed=embed, view=view)
                     else:
                         await message.channel.send(f"⚠️ الآية {ayah_num} غير موجودة.", delete_after=5)
                 else:
-                    # يظهر فقط إذا كتب المستخدم صيغة آية ولكن الاسم خطأ
+                    # يرسل الخطأ فقط إذا كانت الصيغة (نص : رقم) ولم يجد السورة
                     await message.channel.send(f"⚠️ لم أجد سورة باسم '{raw_surah}'.", delete_after=10)
-        
         except Exception as e:
-            print(f"Error at line: {e}")
+            print(f"Error: {e}")
+
+# تشغيل البوت
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

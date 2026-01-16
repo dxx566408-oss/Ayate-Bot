@@ -6,7 +6,7 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. حل مشكلة Render (فتح البورت)
+# 1. حل مشكلة Render (إبقاء البوت متصلاً)
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
@@ -24,7 +24,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# دالة تنظيف النص (ضرورية لكي يعمل البحث عن السور)
+# دالة تنظيف النص للبحث
 def clean_text(text):
     return text.strip().replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
 
@@ -70,11 +70,10 @@ class AyahActions(View):
         res = requests.get(url)
         if res.status_code == 200:
             tafsir_text = res.json()['data']['text']
-            # قص النص إذا كان طويلاً جداً لديسكورد
             if len(tafsir_text) > 1900: tafsir_text = tafsir_text[:1900] + "..."
             await interaction.response.send_message(f"📑 **تفسير ابن كثير - {self.surah_name} ({self.ayah_num}):**\n\n{tafsir_text}", ephemeral=True)
         else:
-            await interaction.response.send_message("⚠️ عذراً، لم أستطع جلب التفسير حالياً.", ephemeral=True)
+            await interaction.response.send_message("⚠️ عذراً، فشل جلب التفسير.", ephemeral=True)
 
     @discord.ui.button(label="نسخ الآية", style=discord.ButtonStyle.secondary, emoji="📋")
     async def copy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -89,7 +88,7 @@ async def on_message(message):
     if ":" in message.content:
         try:
             parts = message.content.split(":")
-            # التأكد أن ما بعد النقطتين هو رقم (رقم الآية) لمنع التفاعل مع الإيموجي
+            # التحقق أن ما بعد النقطتين هو رقم (رقم الآية) لمنع التفاعل مع الإيموجي
             if len(parts) == 2 and parts[1].strip().isdigit():
                 raw_surah = parts[0].strip()
                 ayah_num = parts[1].strip()
@@ -115,9 +114,9 @@ async def on_message(message):
                         
                         clean_ayah = ayah_text.replace(basmala, "").strip()
                         
-                        # تنسيق البسملة بخط صغير فوق الآية
+                        # تنسيق البسملة والآية بخط طبيعي وعريض
                         if target_surah_id != 1 and target_surah_id != 9:
-                            formatted_desc = f"`{basmala}`\n\n**{clean_ayah}**"
+                            formatted_desc = f"**{basmala}**\n\n**{clean_ayah}**"
                         else:
                             formatted_desc = f"**{ayah_text}**"
 
@@ -130,10 +129,10 @@ async def on_message(message):
                         view = AyahActions(target_surah_id, ayah_num, clean_ayah, real_name)
                         await message.channel.send(embed=embed, view=view)
                     else:
-                        await message.channel.send(f"⚠️ الآية {ayah_num} غير موجودة.", delete_after=5)
+                        await message.channel.send(f"⚠️ الآية {ayah_num} غير موجودة في سورة {real_name}.", delete_after=5)
                 else:
-                    # يرسل الخطأ فقط إذا كانت الصيغة (نص : رقم) ولم يجد السورة
-                    await message.channel.send(f"⚠️ لم أجد سورة باسم '{raw_surah}'.", delete_after=10)
+                    # يرسل التنبيه فقط إذا كانت الصيغة (نص : رقم) ولم يجد السورة
+                    await message.channel.send(f"⚠️ لم أجد سورة باسم '{raw_surah}'. تأكد من الاسم بالهمزات.", delete_after=10)
         except Exception as e:
             print(f"Error: {e}")
 

@@ -6,7 +6,7 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. نظام إبقاء البوت يعمل (Render)
+# 1. إبقاء البوت يعمل
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
@@ -53,7 +53,7 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
-# 3. واجهة الأزرار (تفسير الميسر فقط)
+# 3. واجهة الأزرار (تفسير + استماع)
 class AyahActions(View):
     def __init__(self, surah_id, ayah_num, real_name):
         super().__init__(timeout=None)
@@ -63,18 +63,29 @@ class AyahActions(View):
 
     @discord.ui.button(label="تفسير الميسر", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # جلب تفسير الميسر (ar.muyassar)
         url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.muyassar"
         res = requests.get(url)
         if res.status_code == 200:
             tafsir_data = res.json()['data']['text']
-            # إرسال التفسير كرسالة مخفية
             if len(tafsir_data) > 1900: tafsir_data = tafsir_data[:1900] + "..."
             await interaction.response.send_message(f"📑 **التفسير الميسر - {self.real_name} ({self.ayah_num}):**\n\n{tafsir_data}", ephemeral=True)
-        else:
-            await interaction.response.send_message("⚠️ عذراً، تعذر جلب التفسير.", ephemeral=True)
 
-# 4. معالجة الرسائل بنص Tanzil وبدون بسملة
+    @discord.ui.button(label="استماع للآية", style=discord.ButtonStyle.success, emoji="🎙️")
+    async def audio_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # رابط الصوت (بصوت العفاسي)
+        audio_url = f"https://cdn.islamic.network/quran/audio/128/ar.alafasy/{self.surah_id * 1000 + int(self.ayah_num)}.mp3"
+        # تم استخدام عملية حسابية بسيطة لجلب رقم الآية التسلسلي في المصحف
+        # أو نطلب الرابط مباشرة من الـ API لضمان الدقة:
+        api_url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.alafasy"
+        res = requests.get(api_url)
+        
+        if res.status_code == 200:
+            audio_link = res.json()['data']['audio']
+            await interaction.response.send_message(f"🔊 **تلاوة الآية بصوت الشيخ مشاري العفاسي:**\n{audio_link}", ephemeral=True)
+        else:
+            await interaction.response.send_message("⚠️ عذراً، تعذر جلب الملف الصوتي.", ephemeral=True)
+
+# 4. معالجة الرسائل
 @bot.event
 async def on_message(message):
     if message.author == bot.user: return
@@ -97,20 +108,17 @@ async def on_message(message):
                         break
 
                 if target_surah_id:
-                    # نص Tanzil (quran-simple)
                     url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/quran-simple"
                     res = requests.get(url)
                     
                     if res.status_code == 200:
                         data = res.json()['data']
                         ayah_text = data['text']
-                        
-                        # حذف البسملة نهائياً من النص
                         basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
                         clean_ayah = ayah_text.replace(basmala, "").strip()
 
                         embed = discord.Embed(
-                            title=f"📖 {real_name} - آية {ayah_num}",
+                            title=f"📖 {real_name} - {ayah_num}",
                             description=f"**{clean_ayah}**",
                             color=discord.Color.blue()
                         )

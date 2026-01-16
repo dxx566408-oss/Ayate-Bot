@@ -6,7 +6,7 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. إبقاء البوت متصلاً
+# 1. نظام إبقاء البوت يعمل (Render)
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
@@ -19,7 +19,7 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# 2. إعدادات البوت
+# 2. إعدادات ديسكورد
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -27,7 +27,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 def clean_text(text):
     return text.strip().replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه").replace(" ", "")
 
-# --- أكمل قائمة السور هنا ---
+# --- قائمة السور (أكملها هنا) ---
 surah_map = {
     "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -53,9 +53,7 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
-
-
-# 3. واجهة الأزرار (تفسير ابن كثير فقط)
+# 3. زر التفسير (رسالة مخفية)
 class AyahActions(View):
     def __init__(self, surah_id, ayah_num, real_name):
         super().__init__(timeout=None)
@@ -65,16 +63,17 @@ class AyahActions(View):
 
     @discord.ui.button(label="تفسير ابن كثير", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # طلب التفسير من المصدر
         url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.ibnkathir"
         res = requests.get(url)
         if res.status_code == 200:
-            tafsir_text = res.json()['data']['text']
-            if len(tafsir_text) > 1900: tafsir_text = tafsir_text[:1900] + "..."
-            await interaction.response.send_message(f"📑 **تفسير ابن كثير - {self.real_name} ({self.ayah_num}):**\n\n{tafsir_text}", ephemeral=True)
+            tafsir_data = res.json()['data']['text']
+            if len(tafsir_data) > 1900: tafsir_data = tafsir_data[:1900] + "..."
+            await interaction.response.send_message(f"📑 **تفسير ابن كثير - {self.real_name} ({self.ayah_num}):**\n\n{tafsir_data}", ephemeral=True)
         else:
             await interaction.response.send_message("⚠️ عذراً، تعذر جلب التفسير.", ephemeral=True)
 
-# 4. معالجة الرسائل (بدون بسملة نهائياً)
+# 4. معالجة الرسائل بنص Tanzil
 @bot.event
 async def on_message(message):
     if message.author == bot.user: return
@@ -97,21 +96,21 @@ async def on_message(message):
                         break
 
                 if target_surah_id:
-                    url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/ar.quran-simple"
+                    # طلب النص من نسخة Tanzil (quran-simple) لضمان الدقة القصوى
+                    url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/quran-simple"
                     res = requests.get(url)
                     
                     if res.status_code == 200:
                         data = res.json()['data']
                         ayah_text = data['text']
                         
-                        # حذف البسملة إذا كانت موجودة في نص الآية من المصدر
+                        # حذف البسملة تماماً مهما كان موقعها
                         basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
                         clean_ayah = ayah_text.replace(basmala, "").strip()
 
-                        # عرض نص الآية فقط بخط عريض
                         embed = discord.Embed(
-                            title=f"📖 {real_name} - {ayah_num}",
-                            description=f"**{clean_ayah}**",
+                            title=f"📖 {real_name} - آية {ayah_num}",
+                            description=f"**{clean_ayah}**", # الآية فقط بخط عريض
                             color=discord.Color.blue()
                         )
                         

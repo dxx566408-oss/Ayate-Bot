@@ -6,7 +6,7 @@ import os
 from flask import Flask
 from threading import Thread
 
-# 1. إبقاء البوت متصلاً (Render/Uptime)
+# 1. إبقاء البوت متصلاً
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is Alive!"
@@ -24,11 +24,10 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# دالة تنظيف النص (تتجاهل الهمزات والمسافات لسهولة البحث)
 def clean_text(text):
     return text.strip().replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه").replace(" ", "")
 
-# القاموس الكامل للسور
+# --- أكمل قائمة السور هنا ---
 surah_map = {
     "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -55,6 +54,7 @@ surah_map = {
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
 
+
 # 3. واجهة الأزرار (تفسير ابن كثير فقط)
 class AyahActions(View):
     def __init__(self, surah_id, ayah_num, real_name):
@@ -65,18 +65,16 @@ class AyahActions(View):
 
     @discord.ui.button(label="تفسير ابن كثير", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # جلب التفسير الفعلي من API
         url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.ibnkathir"
         res = requests.get(url)
         if res.status_code == 200:
             tafsir_text = res.json()['data']['text']
-            # إرسال التفسير كرسالة مخفية (Ephemeral)
             if len(tafsir_text) > 1900: tafsir_text = tafsir_text[:1900] + "..."
             await interaction.response.send_message(f"📑 **تفسير ابن كثير - {self.real_name} ({self.ayah_num}):**\n\n{tafsir_text}", ephemeral=True)
         else:
-            await interaction.response.send_message("⚠️ عذراً، لم أتمكن من جلب التفسير حالياً.", ephemeral=True)
+            await interaction.response.send_message("⚠️ عذراً، تعذر جلب التفسير.", ephemeral=True)
 
-# 4. معالجة الرسائل
+# 4. معالجة الرسائل (بدون بسملة نهائياً)
 @bot.event
 async def on_message(message):
     if message.author == bot.user: return
@@ -105,36 +103,22 @@ async def on_message(message):
                     if res.status_code == 200:
                         data = res.json()['data']
                         ayah_text = data['text']
-                        standard_basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
                         
-                        # تنظيف نص الآية من البسملة المدمجة (مثل البقرة 1)
-                        if ayah_text.startswith(standard_basmala):
-                            clean_ayah = ayah_text[len(standard_basmala):].strip()
-                        else:
-                            clean_ayah = ayah_text
+                        # حذف البسملة إذا كانت موجودة في نص الآية من المصدر
+                        basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
+                        clean_ayah = ayah_text.replace(basmala, "").strip()
 
-                        # التنسيق: البسملة في سطر مستقل (إلا الفاتحة آية 1)
-                        if target_surah_id == 1 and ayah_num == "1":
-                            formatted_desc = f"**{ayah_text}**"
-                        elif target_surah_id != 9: # كل السور عدا التوبة
-                            formatted_desc = f"**{standard_basmala}**\n\n**{clean_ayah}**"
-                        else: # سورة التوبة تظهر بدون بسملة
-                            formatted_desc = f"**{clean_ayah}**"
-
+                        # عرض نص الآية فقط بخط عريض
                         embed = discord.Embed(
-                            title=f"📖 سورة {real_name} - آية {ayah_num}",
-                            description=formatted_desc,
+                            title=f"📖 {real_name} - {ayah_num}",
+                            description=f"**{clean_ayah}**",
                             color=discord.Color.blue()
                         )
                         
                         view = AyahActions(target_surah_id, ayah_num, real_name)
                         await message.channel.send(embed=embed, view=view)
-                    else:
-                        # تنبيه مخفي بسيط في حال لم تكن الآية موجودة (عبر حذف الرسالة)
-                        pass
         except Exception as e:
             print(f"Error: {e}")
 
-# تشغيل البوت
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

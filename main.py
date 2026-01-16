@@ -77,16 +77,20 @@ async def on_message(message):
     if message.author == bot.user: return
 
     # التحقق من وجود النقطتين وأن الرسالة ليست مجرد رمز تعبيري أو كلام عشوائي
-   if ":" in message.content:
+ if ":" in message.content:
         try:
+            # تقسيم الرسالة للتأكد أنها بصيغة (اسم : رقم)
             parts = message.content.split(":")
-            # التأكد أن هناك جزئين فقط وأن ما بعد النقطتين هو رقم
+            
+            # التعديل الأهم: التأكد أن ما بعد النقطتين هو رقم (لمنع التفاعل مع الإيموجي)
             if len(parts) == 2 and parts[1].strip().isdigit():
                 raw_surah = parts[0].strip()
                 ayah_num = parts[1].strip()
 
                 target_surah_id = None
                 clean_input = clean_text(raw_surah)
+                
+                # البحث عن اسم السورة في القاموس
                 for name, s_id in surah_map.items():
                     if clean_text(name) == clean_input:
                         target_surah_id = s_id
@@ -101,8 +105,11 @@ async def on_message(message):
                         data = res.json()['data']
                         ayah_text = data['text']
                         basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
+                        
+                        # تنظيف نص الآية من البسملة الزائدة
                         clean_ayah = ayah_text.replace(basmala, "").strip()
-
+                        
+                        # تنسيق الإيمبد (البسملة فوق في سطر مستقل)
                         if target_surah_id != 1 and target_surah_id != 9:
                             formatted_desc = f"`{basmala}`\n\n**{clean_ayah}**"
                         else:
@@ -114,15 +121,16 @@ async def on_message(message):
                             color=discord.Color.blue()
                         )
                         
+                        # إرسال الرسالة مع الأزرار
                         view = AyahActions(target_surah_id, ayah_num, clean_ayah, real_name)
                         await message.channel.send(embed=embed, view=view)
                     else:
                         await message.channel.send(f"⚠️ الآية {ayah_num} غير موجودة.", delete_after=5)
                 else:
-                    # البوت لن يرسل هذا الخطأ إلا إذا كان المستخدم يقصد كتابة آية فعلاً (بسبب شرط الرقم)
+                    # يظهر فقط إذا كتب المستخدم صيغة آية ولكن الاسم خطأ
                     await message.channel.send(f"⚠️ لم أجد سورة باسم '{raw_surah}'.", delete_after=10)
+        
         except Exception as e:
-            print(f"Error: {e}")
-
+            print(f"Error at line: {e}")
 keep_alive()
 bot.run(os.getenv('DISCORD_TOKEN'))

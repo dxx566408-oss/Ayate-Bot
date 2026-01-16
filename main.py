@@ -53,7 +53,8 @@ surah_map = {
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
 }
-# 3. زر التفسير (رسالة مخفية)
+
+# 3. واجهة الأزرار (تفسير الميسر فقط)
 class AyahActions(View):
     def __init__(self, surah_id, ayah_num, real_name):
         super().__init__(timeout=None)
@@ -61,63 +62,8 @@ class AyahActions(View):
         self.ayah_num = ayah_num
         self.real_name = real_name
 
-    @discord.ui.button(label="تفسير ابن كثير", style=discord.ButtonStyle.primary, emoji="📖")
+    @discord.ui.button(label="تفسير الميسر", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # طلب التفسير من المصدر
-        url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.ibnkathir"
-        res = requests.get(url)
-        if res.status_code == 200:
-            tafsir_data = res.json()['data']['text']
-            if len(tafsir_data) > 1900: tafsir_data = tafsir_data[:1900] + "..."
-            await interaction.response.send_message(f"📑 **تفسير ابن كثير - {self.real_name} ({self.ayah_num}):**\n\n{tafsir_data}", ephemeral=True)
-        else:
-            await interaction.response.send_message("⚠️ عذراً، تعذر جلب التفسير.", ephemeral=True)
-
-# 4. معالجة الرسائل بنص Tanzil
-@bot.event
-async def on_message(message):
-    if message.author == bot.user: return
-
-    if ":" in message.content:
-        try:
-            parts = message.content.split(":")
-            if len(parts) == 2 and parts[1].strip().isdigit():
-                raw_surah = parts[0].strip()
-                ayah_num = parts[1].strip()
-
-                target_surah_id = None
-                real_name = ""
-                clean_input = clean_text(raw_surah)
-                
-                for name, s_id in surah_map.items():
-                    if clean_text(name) == clean_input:
-                        target_surah_id = s_id
-                        real_name = name
-                        break
-
-                if target_surah_id:
-                    # طلب النص من نسخة Tanzil (quran-simple) لضمان الدقة القصوى
-                    url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/quran-simple"
-                    res = requests.get(url)
-                    
-                    if res.status_code == 200:
-                        data = res.json()['data']
-                        ayah_text = data['text']
-                        
-                        # حذف البسملة تماماً مهما كان موقعها
-                        basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
-                        clean_ayah = ayah_text.replace(basmala, "").strip()
-
-                        embed = discord.Embed(
-                            title=f"📖 {real_name} - آية {ayah_num}",
-                            description=f"**{clean_ayah}**", # الآية فقط بخط عريض
-                            color=discord.Color.blue()
-                        )
-                        
-                        view = AyahActions(target_surah_id, ayah_num, real_name)
-                        await message.channel.send(embed=embed, view=view)
-        except Exception as e:
-            print(f"Error: {e}")
-
-keep_alive()
-bot.run(os.getenv('DISCORD_TOKEN'))
+        # جلب تفسير الميسر (ar.muyassar)
+        url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.muyassar"
+        res = requests.get

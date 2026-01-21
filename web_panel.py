@@ -34,7 +34,7 @@ def index():
 @app.route('/login')
 def login():
     # --- ضع بياناتك هنا مباشرة ---
-    CLIENT_ID = "ضع_هنا_ID_بوتك_الحقيقي" 
+    CLIENT_ID = "1461289210123260038" 
     REDIRECT_URI = "https://رابط-موقعك-على-ريندر.onrender.com/login/callback"
     # ----------------------------
 

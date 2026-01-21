@@ -1,75 +1,70 @@
 from flask import Flask, request, redirect, session, render_template_string
-import json
-import os
+import requests, os, json, config
 from threading import Thread
 
 app = Flask('')
-app.secret_key = 'ayate_secret_key_123' # مفتاح عشوائي لتأمين الجلسة
+app.secret_key = 'ayate_secure_key'
 
-# دالات مساعدة للتعامل مع البيانات
 def load_db():
-    with open('database.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+    if not os.path.exists('database.json'): return {"users": {}, "guilds": {}}
+    with open('database.json', 'r', encoding='utf-8') as f: return json.load(f)
 
 def save_db(data):
-    with open('database.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+    with open('database.json', 'w', encoding='utf-8') as f: json.dump(data, f, indent=4, ensure_ascii=False)
 
 @app.route('/')
 def index():
-    if 'user' not in session:
-        # صفحة تسجيل الدخول الأولى (كما طلبت: لا يظهر شيء سوى الزر)
-        return """
-        <body style="background: #2c2f33; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; margin:0;">
-            <div style="text-align: center; color: white; background: #23272a; padding: 50px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                <h1 style="margin-bottom: 30px;">مرحباً بك في لوحة تحكم آيات</h1>
-                <a href="/login" style="background: #5865f2; color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 20px; transition: 0.3s;">
-                    🔐 تسجيل الدخول بحساب ديسكورد
-                </a>
-            </div>
-        </body>
-        """
+    if 'user_id' not in session:
+        return '<body style="background:#2c3e50;display:flex;justify-content:center;align-items:center;height:100vh;"><a href="/login" style="color:white;padding:15px 30px;background:#5865f2;text-decoration:none;border-radius:5px;font-family:sans-serif;">🔐 تسجيل الدخول للإدارة</a></body>'
     return redirect('/dashboard')
 
 @app.route('/login')
 def login():
-    # --- ضع بياناتك هنا مباشرة ---
-    CLIENT_ID = "1461289210123260038" 
-    REDIRECT_URI = "https://ayate-bot.onrender.com/login/callback"
-    # ----------------------------
-
-    auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
+    auth_url = f"https://discord.com/api/oauth2/authorize?client_id={config.CLIENT_ID}&redirect_uri={config.REDIRECT_URI}&response_type=code&scope=identify%20guilds"
     return redirect(auth_url)
+
+@app.route('/login/callback')
+def callback():
+    code = request.args.get('code')
+    data = {'client_id': config.CLIENT_ID, 'client_secret': config.CLIENT_SECRET, 'grant_type': 'authorization_code', 'code': code, 'redirect_uri': config.REDIRECT_URI}
+    r = requests.post('https://discord.com/api/v10/oauth2/token', data=data).json()
+    token = r.get('access_token')
+    user = requests.get('https://discord.com/api/v10/users/@me', headers={'Authorization': f'Bearer {token}'}).json()
+    session['user_id'], session['access_token'], session['username'] = user['id'], token, user['username']
+    return redirect('/dashboard')
 
 @app.route('/dashboard')
 def dashboard():
-    if 'user' not in session: return redirect('/')
-    # هنا ستعرض السيرفرات والقنوات (هيكل تجريبي للواجهة)
-    return f"""
-    <body style="background: #2c2f33; color: white; font-family: sans-serif; padding: 20px; direction: rtl;">
-        <h1>لوحة تحكم السيرفرات</h1>
-        <p>أهلاً بك يا {session['user']['username']}</p>
-        <hr>
-        <div style="background: #23272a; padding: 20px; border-radius: 10px;">
-            <h3>تفعيل/تعطيل الرومات (القنوات)</h3>
-            <p style="color: gray;">هنا تظهر قائمة القنوات بجانبها ✓ للتشغيل و × للتعطيل</p>
-            <button onclick="alert('تم الحفظ')" style="background: #43b581; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">حفظ التغييرات</button>
-        </div>
-        <br>
-        <a href="/logout" style="color: #f04747;">تسجيل الخروج</a>
-    </body>
-    """
+    if 'user_id' not in session: return redirect('/')
+    headers = {'Authorization': f'Bearer {session["access_token"]}'}
+    guilds = requests.get('https://discord.com/api/v10/users/@me/guilds', headers=headers).json()
+    admin_guilds = [g for g in guilds if (int(g['permissions']) & 0x8) == 0x8]
+    
+    html = f'<body style="background:#2c2f33;color:white;font-family:sans-serif;direction:rtl;padding:20px;"><h2>أهلاً {session["username"]}</h2><p>اختر سيرفر لإدارة الرومات:</p>'
+    for g in admin_guilds:
+        html += f'<li><a href="/manage/{g["id"]}" style="color:#7289da;text-decoration:none;">⚙️ {g["name"]}</a></li>'
+    return html + '</body>'
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect('/')
+@app.route('/manage/<guild_id>', methods=['GET', 'POST'])
+def manage(guild_id):
+    if 'user_id' not in session: return redirect('/')
+    db = load_db()
+    if request.method == 'POST':
+        db["guilds"][str(guild_id)] = request.form.getlist('channels')
+        save_db(db)
+        return '<h3>✅ تم الحفظ بنجاح! <a href="/dashboard">عودة</a></h3>'
 
-# --- دالة الـ Uptime الهامة جداً ---
-def run():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    headers = {'Authorization': f'Bot {config.BOT_TOKEN}'}
+    channels = requests.get(f'https://discord.com/api/v10/guilds/{guild_id}/channels', headers=headers).json()
+    enabled = db["guilds"].get(str(guild_id), [])
+    
+    items = ""
+    for c in channels:
+        if c['type'] == 0:
+            check = "checked" if str(c['id']) in enabled else ""
+            items += f'<div style="background:#23272a;padding:10px;margin:5px;border-radius:5px;"><span># {c["name"]}</span> <input type="checkbox" name="channels" value="{c["id"]}" {check}></div>'
+    return f'<body style="background:#2c2f33;color:white;font-family:sans-serif;direction:rtl;padding:20px;"><form method="POST"><h2>إدارة الرومات</h2>{items}<br><button type="submit" style="padding:10px 20px;background:#43b581;color:white;border:none;cursor:pointer;">حفظ</button></form></body>'
 
 def keep_alive():
-    t = Thread(target=run)
+    t = Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000))))
     t.start()

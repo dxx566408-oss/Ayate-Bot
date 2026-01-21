@@ -6,11 +6,52 @@ import os
 from flask import Flask
 from threading import Thread
 from io import BytesIO
+import json
+from flask import Flask, render_template_string, request
 
-# 1. نظام إبقاء البوت يعمل (Uptime)
+# 1. نظام إبقاء البوت يعمل + لوحة التحكم
 app = Flask('')
+
+# متغيرات لتخزين الإعدادات (يمكنك تعديلها من الموقع)
+settings = {
+    "reciter": "ar.alafasy",  # كود القارئ الافتراضي
+    "status": "Online"
+}
+
 @app.route('/')
-def home(): return "Bot is Alive!"
+def home():
+    # تصميم صفحة الموقع (HTML)
+    return f"""
+    <dir dir="rtl" style="text-align: center; font-family: sans-serif; background-color: #f4f4f4; padding: 50px;">
+        <div style="background: white; padding: 20px; border-radius: 10px; display: inline-block; shadow: 0px 0px 10px #ccc;">
+            <h1 style="color: #333;">لوحة تحكم بوت الآيات</h1>
+            <p>حالة البوت: <span style="color: green; font-weight: bold;">{settings['status']}</span></p>
+            <hr>
+            <form action="/update" method="post">
+                <p>تغيير القارئ (أدخل كود القارئ):</p>
+                <input type="text" name="reciter_code" value="{settings['reciter']}" style="padding: 8px; width: 200px; border: 1px solid #ccc;">
+                <br><br>
+                <button type="submit" style="background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">حفظ التغييرات</button>
+            </form>
+            <p style="font-size: 12px; color: #666;">أكواد القراء المتاحة: ar.alafasy, ar.minshawi, ar.abdulsamad</p>
+        </div>
+    </dir>
+    """
+
+@app.route('/update', methods=['POST'])
+def update():
+    from flask import request
+    # استقبال البيانات الجديدة من الموقع وتحديث متغير الإعدادات
+    new_reciter = request.form.get("reciter_code")
+    if new_reciter:
+        settings['reciter'] = new_reciter
+    return """
+    <div style="text-align: center; padding-top: 50px; font-family: sans-serif;">
+        <h2 style="color: green;">✅ تم التحديث بنجاح!</h2>
+        <p>البوت الآن يستخدم القارئ الجديد. يمكنك إغلاق هذه الصفحة.</p>
+        <a href="/">العودة للرئيسية</a>
+    </div>
+    """
 
 def run():
     port = int(os.environ.get("PORT", 10000))

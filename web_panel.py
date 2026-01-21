@@ -35,7 +35,7 @@ def index():
 def login():
     # --- ضع بياناتك هنا مباشرة ---
     CLIENT_ID = "1461289210123260038" 
-    REDIRECT_URI = "https://رابط-موقعك-على-ريندر.onrender.com/login/callback"
+    REDIRECT_URI = "https://ayate-bot.onrender.com/login/callback"
     # ----------------------------
 
     auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"

@@ -3,81 +3,31 @@ from discord.ext import commands
 from discord.ui import Button, View
 import requests
 import os
-from flask import Flask
-from threading import Thread
-from io import BytesIO
 import json
-from flask import Flask, render_template_string, request
+from io import BytesIO
+from web_panel import keep_alive  # استيراد الموقع
 
-# 1. نظام إبقاء البوت يعمل + لوحة التحكم
-app = Flask('')
+# دالة لقراءة الإعدادات من JSON في كل مرة يحتاجها البوت
+def load_config():
+    with open('settings.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
 
-# متغيرات لتخزين الإعدادات (يمكنك تعديلها من الموقع)
-settings = {
-    "reciter": "ar.alafasy",  # كود القارئ الافتراضي
-    "status": "Online"
-}
-
-@app.route('/')
-def home():
-    # تصميم صفحة الموقع (HTML)
-    return f"""
-    <dir dir="rtl" style="text-align: center; font-family: sans-serif; background-color: #f4f4f4; padding: 50px;">
-        <div style="background: white; padding: 20px; border-radius: 10px; display: inline-block; shadow: 0px 0px 10px #ccc;">
-            <h1 style="color: #333;">لوحة تحكم بوت الآيات</h1>
-            <p>حالة البوت: <span style="color: green; font-weight: bold;">{settings['status']}</span></p>
-            <hr>
-            <form action="/update" method="post">
-                <p>تغيير القارئ (أدخل كود القارئ):</p>
-                <input type="text" name="reciter_code" value="{settings['reciter']}" style="padding: 8px; width: 200px; border: 1px solid #ccc;">
-                <br><br>
-                <button type="submit" style="background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">حفظ التغييرات</button>
-            </form>
-            <p style="font-size: 12px; color: #666;">أكواد القراء المتاحة: ar.alafasy, ar.minshawi, ar.abdulsamad</p>
-        </div>
-    </dir>
-    """
-
-@app.route('/update', methods=['POST'])
-def update():
-    from flask import request
-    # استقبال البيانات الجديدة من الموقع وتحديث متغير الإعدادات
-    new_reciter = request.form.get("reciter_code")
-    if new_reciter:
-        settings['reciter'] = new_reciter
-    return """
-    <div style="text-align: center; padding-top: 50px; font-family: sans-serif;">
-        <h2 style="color: green;">✅ تم التحديث بنجاح!</h2>
-        <p>البوت الآن يستخدم القارئ الجديد. يمكنك إغلاق هذه الصفحة.</p>
-        <a href="/">العودة للرئيسية</a>
-    </div>
-    """
-
-def run():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# 2. إعدادات ديسكورد
+# إعدادات ديسكورد
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# دالة تنظيف النصوص
+# دالة تنظيف النصوص وتحويل الأرقام
 def clean_text(text):
     return text.strip().replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه").replace(" ", "")
 
-# دالة تحويل الأرقام العربية/الفارسية إلى إنجليزية
 def convert_to_english_nums(text):
     arabic_nums = "٠١٢٣٤٥٦٧٨٩"
     english_nums = "0123456789"
     translation_table = str.maketrans(arabic_nums, english_nums)
     return text.translate(translation_table)
 
-# --- قائمة السور (أكملها هنا) ---
+# قائمة السور
 surah_map = {
     "الفاتحة": 1, "البقرة": 2, "آل عمران": 3, "النساء": 4, "المائدة": 5,
     "الأنعام": 6, "الأعراف": 7, "الأنفال": 8, "التوبة": 9, "يونس": 10,
@@ -102,9 +52,8 @@ surah_map = {
     "القارعة": 101, "التكاثر": 102, "العصر": 103, "الهمزة": 104, "الفيل": 105,
     "قريش": 106, "الماعون": 107, "الكوثر": 108, "الكافرون": 109, "النصر": 110,
     "المسد": 111, "الإخلاص": 112, "الفلق": 113, "الناس": 114
-    }
+}
 
-# 3. واجهة الأزرار (تفسير الميسر + استماع صوتي)
 class AyahActions(View):
     def __init__(self, surah_id, ayah_num, real_name):
         super().__init__(timeout=None)
@@ -118,76 +67,55 @@ class AyahActions(View):
         res = requests.get(url)
         if res.status_code == 200:
             tafsir_data = res.json()['data']['text']
-            if len(tafsir_data) > 1900: tafsir_data = tafsir_data[:1900] + "..."
             await interaction.response.send_message(f"📑 **التفسير الميسر - {self.real_name} ({self.ayah_num}):**\n\n{tafsir_data}", ephemeral=True)
 
     @discord.ui.button(label="استماع للآية", style=discord.ButtonStyle.success, emoji="🎙️")
     async def audio_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        api_url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/ar.alafasy"
+        # جلب الإعدادات المحدثة من الملف (التي تم تغييرها من الموقع)
+        config = load_config()
+        reciter = config['reciter']
+        
+        api_url = f"https://api.alquran.cloud/v1/ayah/{self.surah_id}:{self.ayah_num}/{reciter}"
         res = requests.get(api_url)
         
         if res.status_code == 200:
             audio_url = res.json()['data']['audio']
             audio_res = requests.get(audio_url)
             if audio_res.status_code == 200:
-                audio_file = BytesIO(audio_res.content)
-                filename = f"{self.surah_id}_{self.ayah_num}.mp3"
-                file = discord.File(audio_file, filename=filename)
-                await interaction.followup.send(
-                    content=f"🔊 **تلاوة الآية بصوت الشيخ مشاري العفاسي:**",
-                    file=file,
-                    ephemeral=True
-                )
-            else:
-                await interaction.followup.send("⚠️ تعذر تحميل ملف الصوت حالياً.", ephemeral=True)
-        else:
-            await interaction.followup.send("⚠️ عذراً، لم أجد ملفاً صوتياً لهذه الآية.", ephemeral=True)
+                file = discord.File(BytesIO(audio_res.content), filename="audio.mp3")
+                await interaction.followup.send(content=f"🔊 **تلاوة الآية:**", file=file, ephemeral=True)
 
-# 4. معالجة الرسائل
 @bot.event
 async def on_message(message):
     if message.author == bot.user: return
-
     if ":" in message.content:
         try:
             parts = message.content.split(":")
             if len(parts) == 2:
                 raw_surah = parts[0].strip()
-                # تطبيق تحويل الأرقام هنا لتعمل الأرقام العربية
                 ayah_num = convert_to_english_nums(parts[1].strip())
-
                 if ayah_num.isdigit():
                     target_surah_id = None
                     real_name = ""
                     clean_input = clean_text(raw_surah)
-                    
                     for name, s_id in surah_map.items():
                         if clean_text(name) == clean_input:
-                            target_surah_id = s_id
-                            real_name = name
+                            target_surah_id, real_name = s_id, name
                             break
-
                     if target_surah_id:
-                        url = f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/quran-simple"
-                        res = requests.get(url)
-                        
-                        if res.status_code == 200:
-                            data = res.json()['data']
-                            ayah_text = data['text']
-                            basmala = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ"
-                            clean_ayah = ayah_text.replace(basmala, "").strip()
+                        res = requests.get(f"https://api.alquran.cloud/v1/ayah/{target_surah_id}:{ayah_num}/quran-simple").json()
+                        if 'data' in res:
+                            clean_ayah = res['data']['text'].replace("بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ", "").strip()
+                            embed = discord.Embed(title=f"📖 {real_name} - {ayah_num}", description=f"**{clean_ayah}**", color=discord.Color.blue())
+                            await message.channel.send(embed=embed, view=AyahActions(target_surah_id, ayah_num, real_name))
+        except: pass
 
-                            embed = discord.Embed(
-                                title=f"📖 {real_name} - {ayah_num}",
-                                description=f"**{clean_ayah}**",
-                                color=discord.Color.blue()
-                            )
-                            
-                            view = AyahActions(target_surah_id, ayah_num, real_name)
-                            await message.channel.send(embed=embed, view=view)
-        except Exception as e:
-            print(f"Error: {e}")
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
 
+# تشغيل الموقع
 keep_alive()
+# تشغيل البوت
 bot.run(os.getenv('DISCORD_TOKEN'))

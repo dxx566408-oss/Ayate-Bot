@@ -33,10 +33,12 @@ def index():
 
 @app.route('/login')
 def login():
-    # استبدل YOUR_CLIENT_ID بـ ID بوتك و YOUR_REDIRECT_URI برابط موقعك/login/callback
-    client_id = os.getenv("CLIENT_ID") 
-    redirect_uri = os.getenv("REDIRECT_URI")
-    auth_url = f"https://discord.com/api/oauth2/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope=identify%20guilds"
+    # --- ضع بياناتك هنا مباشرة ---
+    CLIENT_ID = "ضع_هنا_ID_بوتك_الحقيقي" 
+    REDIRECT_URI = "https://رابط-موقعك-على-ريندر.onrender.com/login/callback"
+    # ----------------------------
+
+    auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
     return redirect(auth_url)
 
 @app.route('/dashboard')

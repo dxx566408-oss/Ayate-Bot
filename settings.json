@@ -1,5 +1,5 @@
 {
     "reciter": "ar.alafasy",
-    "show_tafsir": "True",
-    "bot_name": "بوت الآيات"
+    "client_id": "ضع_هنا_ID_البوت",
+    "invite_link": "https://discord.com/oauth2/authorize?client_id=1461289210123260038&permissions=8&integration_type=0&scope=bot+applications.commands"
 }

@@ -4,7 +4,6 @@ from discord.ui import View, Select, Button
 from io import BytesIO
 from web_panel import keep_alive
 
-# دالة لتحويل الأرقام العربية/الفارسية إلى إنجليزية
 def ar_to_en_numbers(text):
     arabic_numbers = '٠١٢٣٤٥٦٧٨٩'
     english_numbers = '0123456789'
@@ -19,7 +18,7 @@ def save_db(data):
     with open('database.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# واجهة اختيار القارئ/التفسير مع زر الاعتماد
+# --- قائمة اختيار مع خيار الاعتماد ---
 class DynamicSelect(Select):
     def __init__(self, s_id, a_id, mode):
         self.mode = mode
@@ -33,11 +32,10 @@ class DynamicSelect(Select):
         selection_value = self.values[0]
         selected_label = next(item['label'] for item in self.options_source if item['value'] == selection_value)
         
-        # جلب البيانات (تعديل رابط التفسير لضمان عدم جلب الآية فقط)
-        url = f"https://api.alquran.cloud/v1/ayah/{self.s_id}:{self.a_id}/{selection_value}"
-        res = requests.get(url).json()
+        # جلب البيانات
+        res = requests.get(f"https://api.alquran.cloud/v1/ayah/{self.s_id}:{self.a_id}/{selection_value}").json()
 
-        # إنشاء زر الاعتماد
+        # زر الاعتماد (للمستقبل)
         view = View()
         adopt_btn = Button(label=f"اعتماد {selected_label}", style=discord.ButtonStyle.danger, emoji="✅")
         
@@ -45,22 +43,21 @@ class DynamicSelect(Select):
             db = load_db()
             u_id = str(interaction.user.id)
             if u_id not in db["users"]: db["users"][u_id] = {}
+            # حفظ منفصل للقارئ والتفسير
             db["users"][u_id][self.mode] = selection_value
             save_db(db)
-            await interaction.response.send_message(f"✅ تم اعتماد **{selected_label}** كـ{'قارئ' if self.mode == 'reciter' else 'تفسير'} افتراضي لك.", ephemeral=True)
+            await interaction.response.send_message(f"✅ تم اعتماد **{selected_label}** كاختيار افتراضي.", ephemeral=True)
         
         adopt_btn.callback = adopt_callback
         view.add_item(adopt_btn)
 
         if self.mode == 'reciter':
-            audio_url = res['data']['audio']
-            file = discord.File(BytesIO(requests.get(audio_url).content), filename="audio.mp3")
-            await itn.followup.send(content=f"🎙️ تلاوة: **{selected_label}**", file=file, view=view, ephemeral=True)
+            audio = requests.get(res['data']['audio']).content
+            await itn.followup.send(content=f"🎙️ **{selected_label}**", file=discord.File(BytesIO(audio), filename="q.mp3"), view=view, ephemeral=True)
         else:
-            # نصوص التفسير أحياناً تحتاج تنظيف
-            tafsir_text = res['data']['text']
-            await itn.followup.send(content=f"📑 **{selected_label}**:\n\n{tafsir_text}", view=view, ephemeral=True)
+            await itn.followup.send(content=f"📑 **{selected_label}**:\n\n{res['data']['text']}", view=view, ephemeral=True)
 
+# --- الواجهة الرئيسية تحت الآية ---
 class AyahActions(View):
     def __init__(self, s_id, a_id):
         super().__init__(timeout=None)
@@ -68,63 +65,73 @@ class AyahActions(View):
 
     @discord.ui.button(label="استماع", style=discord.ButtonStyle.success, emoji="🎙️")
     async def listen(self, itn, btn):
-        db = load_db()
-        u_id = str(itn.user.id)
-        # إذا كان لديه قارئ معتمد مسبقاً، يرسله مباشرة
+        db = load_db(); u_id = str(itn.user.id)
         if u_id in db["users"] and "reciter" in db["users"][u_id]:
             await itn.response.defer(ephemeral=True)
-            reciter = db["users"][u_id]["reciter"]
-            res = requests.get(f"https://api.alquran.cloud/v1/ayah/{self.s_id}:{self.a_id}/{reciter}").json()
-            audio = requests.get(res['data']['audio']).content
-            await itn.followup.send(file=discord.File(BytesIO(audio), filename="quran.mp3"), ephemeral=True)
+            res = requests.get(f"https://api.alquran.cloud/v1/ayah/{self.s_id}:{self.a_id}/{db['users'][u_id]['reciter']}").json()
+            # إضافة زر تغيير القارئ في الرد التلقائي
+            v = View(); change_btn = Button(label="تغيير القارئ الافتراضي", style=discord.ButtonStyle.secondary)
+            async def change_rec(i):
+                v_new = View(); v_new.add_item(DynamicSelect(self.s_id, self.a_id, 'reciter'))
+                await i.response.send_message("اختر قارئاً جديداً لاعتماده:", view=v_new, ephemeral=True)
+            change_btn.callback = change_rec; v.add_item(change_btn)
+            
+            await itn.followup.send(file=discord.File(BytesIO(requests.get(res['data']['audio']).content), filename="q.mp3"), view=v, ephemeral=True)
         else:
             v = View(); v.add_item(DynamicSelect(self.s_id, self.a_id, 'reciter'))
-            await itn.response.send_message("اختر قارئاً (يمكنك اعتماده ليظهر لك مباشرة المرة القادمة):", view=v, ephemeral=True)
+            await itn.response.send_message("اختر قارئاً:", view=v, ephemeral=True)
 
     @discord.ui.button(label="تفسير", style=discord.ButtonStyle.primary, emoji="📖")
     async def tafsir(self, itn, btn):
-        v = View(); v.add_item(DynamicSelect(self.s_id, self.a_id, 'tafsir'))
-        await itn.response.send_message("اختر التفسير:", view=v, ephemeral=True)
+        db = load_db(); u_id = str(itn.user.id)
+        if u_id in db["users"] and "tafsir" in db["users"][u_id]:
+            await itn.response.defer(ephemeral=True)
+            res = requests.get(f"https://api.alquran.cloud/v1/ayah/{self.s_id}:{self.a_id}/{db['users'][u_id]['tafsir']}").json()
+            
+            v = View(); change_btn = Button(label="تغيير التفسير الافتراضي", style=discord.ButtonStyle.secondary)
+            async def change_taf(i):
+                v_new = View(); v_new.add_item(DynamicSelect(self.s_id, self.a_id, 'tafsir'))
+                await i.response.send_message("اختر تفسيراً جديداً لاعتماده:", view=v_new, ephemeral=True)
+            change_btn.callback = change_taf; v.add_item(change_btn)
+            
+            await itn.followup.send(content=f"📑 **التفسير المعتمد لديك:**\n\n{res['data']['text']}", view=v, ephemeral=True)
+        else:
+            v = View(); v.add_item(DynamicSelect(self.s_id, self.a_id, 'tafsir'))
+            await itn.response.send_message("اختر التفسير:", view=v, ephemeral=True)
 
     @discord.ui.button(label="عن السورة", style=discord.ButtonStyle.secondary, emoji="✨")
     async def about_surah(self, itn, btn):
         await itn.response.defer(ephemeral=True)
+        # استخدام رابط الـ API البديل والأكثر استقراراً
         try:
-            # استخدام API quran.com للحصول على معلومات السورة
-            res = requests.get(f"https://api.quran.com/api/v4/surah_informations/{self.s_id}?language=ar").json()
-            info = res['surah_information']['short_text']
-            clean_info = re.sub('<[^<]+?>', '', info) # تنظيف HTML
-            embed = discord.Embed(title="✨ حول السورة", description=clean_info[:2000], color=0xFFD700)
+            r = requests.get(f"https://api.quran.com/api/v4/surahs/{self.s_id}/info?language=ar").json()
+            info_text = r['surah_info']['short_text']
+            # تنظيف النص من أكواد HTML
+            clean_info = re.sub(r'<[^>]*>', '', info_text)
+            embed = discord.Embed(title="✨ نبذة عن السورة", description=clean_info[:2000], color=0x3498db)
             await itn.followup.send(embed=embed, ephemeral=True)
         except:
-            await itn.followup.send("تعذر جلب المعلومات حالياً.", ephemeral=True)
+            # محاولة جلب وصف بسيط إذا فشل الرابط الأول
+            await itn.followup.send("تعذر جلب تفاصيل السورة حالياً، يرجى المحاولة لاحقاً.", ephemeral=True)
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 @bot.event
 async def on_message(msg):
     if msg.author == bot.user: return
-    
-    # تحويل الأرقام في الرسالة قبل المعالجة
     content = ar_to_en_numbers(msg.content)
-    
     if ":" in content:
         parts = content.split(":")
         s_input = surahs.clean_text(parts[0])
         a_input = parts[1].strip()
-        
         target_id = None
         for name, sid in surahs.surah_list.items():
             if surahs.clean_text(name) == s_input:
-                target_id = sid
-                break
-        
+                target_id = sid; break
         if target_id and a_input.isdigit():
-            # جلب نص الآية بالرسم العثماني
             res = requests.get(f"https://api.alquran.cloud/v1/ayah/{target_id}:{a_input}/quran-simple").json()
             if 'data' in res:
-                s_name = res['data']['surah']['name']
-                embed = discord.Embed(title=f"📖 {s_name} - {a_input}", description=f"**{res['data']['text']}**", color=0x2ecc71)
+                embed = discord.Embed(title=f"📖 {res['data']['surah']['name']} - {a_input}", description=f"**{res['data']['text']}**", color=0x2ecc71)
                 await msg.channel.send(embed=embed, view=AyahActions(target_id, a_input))
 
 keep_alive()

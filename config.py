@@ -2,9 +2,9 @@ import os
 
 # بيانات الربط الأساسية
 BOT_TOKEN = os.getenv("DISCORD_TOKEN")
-CLIENT_ID = "ضع_هنا_ID_البوت"
-CLIENT_SECRET = "ضع_هنا_Secret_البوت"
-REDIRECT_URI = "https://your-app.onrender.com/login/callback"
+CLIENT_ID = "1461289210123260038"
+CLIENT_SECRET = "QPCpakqnbkseafSsPQo8XnX4sg975ClZ"
+REDIRECT_URI = "https://ayate-bot.onrender.com/login/callback"
 
 # قائمة القراء - يمكنك إضافة أي قارئ جديد هنا بسهولة
 RECITERS = [

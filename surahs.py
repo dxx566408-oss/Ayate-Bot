@@ -1,4 +1,3 @@
-mmm# surahs.py
 def clean_text(text):
     if not text: return ""
     replacements = {"أ": "ا", "إ": "ا", "آ": "ا", "ة": "ه", "ى": "ي", " ": ""}
